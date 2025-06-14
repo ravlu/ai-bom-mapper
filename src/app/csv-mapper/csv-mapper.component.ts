@@ -1,5 +1,6 @@
 // src/app/csv-mapper/csv-mapper.component.ts
 import { Component, OnInit, ChangeDetectorRef, OnDestroy } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { environment } from '../../environments/environment';
 
@@ -26,13 +27,14 @@ interface MappingTableRow {
   styleUrls: ['./csv-mapper.component.css']
 })
 export class CsvMapperComponent implements OnInit, OnDestroy {
+  private odataUrl = 'https://684c168eed2578be881d9c58.mockapi.io/api/v1/LineItemProperties';
   sourceCsvHeaders: string[] = [];
   sourceCsvSampleData: string[][] = []; // Only first 10 rows of actual data
   targetSchemaColumns: string[] = [];
   tripletKnowledgeBase: Array<{ anchor: string, positive: string, negative: string }> = [];
 
   isSourceUploaded = false;
-  isTargetSchemaProvided = false;
+  isTargetSchemaProvided = false; // This will be set by OData fetch
   isTripletKnowledgeBaseUploaded = false;
 
   readonly N_A_MAP_VALUE = "__N/A_MAPPING__";
@@ -56,7 +58,7 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
 
   private genAI: GoogleGenAI | null = null;
 
-  constructor(private cdr: ChangeDetectorRef) {
+  constructor(private cdr: ChangeDetectorRef, private http: HttpClient) {
     if (!environment.apiKey) {
       console.error("API_KEY environment variable not set for Gemini API.");
       this.updateStatus('Configuration error: API Key is missing. Cannot contact AI service.', true);
@@ -67,6 +69,7 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.fetchTargetSchemaFromOData(); // Load target schema on init
     this.checkIfReadyForMappingAndSuggestions();
   }
 
@@ -149,6 +152,31 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
     return duplicatesWereFoundThisCheck;
   }
 
+  async fetchTargetSchemaFromOData(): Promise<void> {
+    this.updateStatus('Fetching target schema from OData...', false);
+    try {
+      const response = await this.http.get<Array<{ DisplayName: string }>>(this.odataUrl).toPromise();
+      if (response && Array.isArray(response)) {
+        this.targetSchemaColumns = response.map(item => item.DisplayName).filter(name => name);
+        if (this.targetSchemaColumns.length > 0) {
+          this.isTargetSchemaProvided = true;
+          this.updateStatus(`Target schema loaded from OData: ${this.targetSchemaColumns.length} columns.`, false);
+        } else {
+          this.updateStatus('Target schema loaded from OData, but no display names found.', true);
+          this.isTargetSchemaProvided = false;
+        }
+      } else {
+        this.updateStatus('Error: Invalid response structure from OData for target schema.', true);
+        this.isTargetSchemaProvided = false;
+      }
+    } catch (error) {
+      console.error('Error fetching target schema from OData:', error);
+      this.updateStatus('Error fetching target schema from OData. Check console for details.', true);
+      this.isTargetSchemaProvided = false;
+    }
+    this.checkIfReadyForMappingAndSuggestions(); // Update UI based on new state
+  }
+
   updateDownloadButtonsState(): void {
     // Triplet Data Button
     if (this.isSourceUploaded && this.isTargetSchemaProvided) {
@@ -180,7 +208,7 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
     if (this.isSourceUploaded && this.isTargetSchemaProvided) {
       this.aiSuggestionControlsVisible = true;
       this.suggestMappingsButtonDisabled = false;
-      let readyMessage = 'Source and Target Schema CSVs loaded.';
+      let readyMessage = 'Source CSV loaded. Target Schema automatically loaded from OData.';
       if (this.isTripletKnowledgeBaseUploaded) {
         readyMessage += ' Triplet Knowledge CSV also loaded.';
       }
@@ -194,13 +222,15 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       this.aiSuggestionControlsVisible = false;
       this.suggestMappingsButtonDisabled = true;
       if (this.isSourceUploaded && !this.isTargetSchemaProvided) {
-        this.updateStatus('Source CSV loaded. Please upload the Target Schema CSV.', false);
+        // This case might be transient while OData is fetching
+        this.updateStatus('Source CSV loaded. Waiting for Target Schema from OData...', false);
         if (this.sourceCsvHeaders.length > 0 && this.mappingTableRows.length === 0) this.displayMappingTable(this.sourceCsvHeaders);
       } else if (!this.isSourceUploaded && this.isTargetSchemaProvided) {
-        this.updateStatus('Target Schema CSV loaded. Please upload the Source CSV.', false);
+        // This case should be less common now, but possible if OData loads before source
+        this.updateStatus('Target Schema loaded from OData. Please upload the Source CSV.', false);
         this.clearMappingTable();
-      } else {
-        this.updateStatus('Please upload a Source CSV and a Target Schema CSV to begin.', false);
+      } else if (!this.isSourceUploaded && !this.isTargetSchemaProvided) {
+        this.updateStatus('Please upload a Source CSV to begin. Target schema will be loaded automatically from OData.', false);
         this.clearMappingTable();
       }
     }
@@ -213,6 +243,12 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0];
 
+    // Target type is no longer handled by file upload
+    if (type === 'target') {
+        console.warn('handleFileUpload called with type "target", which is deprecated.');
+        return;
+    }
+
     if (!file) {
       this.updateStatus(`No file selected for ${type}.`, true);
       if (type === 'source') {
@@ -220,10 +256,6 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
         this.isSourceUploaded = false;
         this.sourceCsvHeaders = [];
         this.sourceCsvSampleData = [];
-      } else if (type === 'target') {
-        this.clearMappingTable();
-        this.isTargetSchemaProvided = false;
-        this.targetSchemaColumns = [];
       } else if (type === 'triplet') {
         this.isTripletKnowledgeBaseUploaded = false;
         this.tripletKnowledgeBase = [];
@@ -236,7 +268,6 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
     if (file.type !== 'text/csv' && !file.name.toLowerCase().endsWith('.csv')) {
       this.updateStatus(`Invalid file type for ${type}. Please upload a .csv file.`, true);
       if (type === 'source') { this.clearMappingTable(); this.isSourceUploaded = false; }
-      else if (type === 'target') { this.clearMappingTable(); this.isTargetSchemaProvided = false; }
       else if (type === 'triplet') { this.isTripletKnowledgeBaseUploaded = false; this.tripletKnowledgeBase = []; }
       target.value = '';
       this.checkIfReadyForMappingAndSuggestions();
@@ -307,11 +338,8 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
               .filter(row => row.length === headers.length && row.some(cell => cell !== ""));
             this.isSourceUploaded = true;
             this.updateStatus(`Source CSV: Loaded ${headers.length} columns and ${this.sourceCsvSampleData.length} sample data rows.`, false);
-          } else { // target
-            this.targetSchemaColumns = headers;
-            this.isTargetSchemaProvided = true;
-            this.updateStatus(`Target Schema CSV: Loaded ${headers.length} target columns.`, false);
           }
+          // 'target' type is no longer processed here
         }
       }
       this.checkIfReadyForMappingAndSuggestions();
@@ -370,7 +398,7 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
 
   async handleSuggestMappings(): Promise<void> {
     if (!this.isSourceUploaded || !this.isTargetSchemaProvided) {
-      this.updateStatus('Both Source CSV and Target Schema CSV must be uploaded first.', true);
+      this.updateStatus('Source CSV must be uploaded and Target Schema must be loaded from OData first.', true);
       return;
     }
     if (!this.genAI) {
@@ -382,12 +410,19 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
     this.suggestMappingsButtonDisabled = true;
     const originalButtonText = this.suggestButtonText;
 
-    const totalPhases = this.isTripletKnowledgeBaseUploaded ? 3 : 2;
-    let currentPhase = 0;
+    const totalPhases = this.isTripletKnowledgeBaseUploaded ? 2 : 1;
+    let currentLogicalPhase = 0; // 0 for Triplet (if active), 1 for Header
 
     const updateSpinner = (phaseType: string) => {
-      this.suggestButtonText = `Thinking (${currentPhase}/${totalPhases}: ${phaseType})...`;
-      this.updateStatus(`AI is thinking (Phase ${currentPhase}/${totalPhases}: ${phaseType})...`, false);
+      let displayPhase = currentLogicalPhase;
+      if (this.isTripletKnowledgeBaseUploaded) {
+        displayPhase += 1; // User sees 1-indexed phases
+      } else {
+        // If only header phase, it's phase 1 of 1
+        displayPhase = 1;
+      }
+      this.suggestButtonText = `Thinking (${displayPhase}/${totalPhases}: ${phaseType})...`;
+      this.updateStatus(`AI is thinking (Phase ${displayPhase}/${totalPhases}: ${phaseType})...`, false);
       this.cdr.detectChanges();
     };
 
@@ -402,7 +437,7 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
 
     // Phase 0: Triplet Knowledge Base
     if (this.isTripletKnowledgeBaseUploaded) {
-      currentPhase = 0; // This phase is effectively "before" Gemini phases
+      currentLogicalPhase = 0; // Corresponds to "Phase 1" for user
       updateSpinner("Triplet Knowledge");
       this.mappingTableRows.forEach(row => {
         if (row.selectedTarget === "" || row.selectedTarget === this.N_A_MAP_VALUE) { // Only if not manually mapped or already N/A
@@ -419,12 +454,12 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
           }
         }
       });
-      currentPhase = 1;
+      currentLogicalPhase = 1; // Advance logical phase to Header
     } else {
-      currentPhase = 1;
+      currentLogicalPhase = 0; // If no triplets, Header is the first logical phase (maps to "Phase 1" for user)
     }
 
-    // Phase 1 (or currentPhase): Header-based AI
+    // Phase 1 (or currentLogicalPhase for spinner): Header-based AI
     updateSpinner("Header-based");
     const unmappedSourceHeadersForAI = this.mappingTableRows
         .filter(row => row.selectedTarget === "" || row.selectedTarget === this.N_A_MAP_VALUE)
@@ -483,19 +518,22 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
         });
       } catch (error) {
         console.error("Error during header-based AI suggestion:", error);
-        this.updateStatus(`Error during Phase ${currentPhase} AI suggestion. Check console.`, true);
+        const displayPhaseForError = this.isTripletKnowledgeBaseUploaded ? 2 : 1;
+        this.updateStatus(`Error during Phase ${displayPhaseForError} (Header-based) AI suggestion. Check console.`, true);
       }
     }
-    currentPhase++;
+    // currentPhase++; // No longer need to increment a shared currentPhase for value-based
 
+    /*
     // Phase 2 (or currentPhase): Value-based AI
-    updateSpinner("Value-based");
+    // updateSpinner("Value-based"); // This would need adjustment if re-enabled
     if (this.genAI) {
         for (let i = 0; i < this.mappingTableRows.length; i++) {
             const row = this.mappingTableRows[i];
             if (row.selectedTarget === "" || row.selectedTarget === this.N_A_MAP_VALUE) {
-                this.updateStatus(`AI is thinking (Phase ${currentPhase}/${totalPhases}: Value-based for '${row.sourceHeader}')...`, false);
-                this.cdr.detectChanges();
+                // let displayPhaseForValue = this.isTripletKnowledgeBaseUploaded ? 3 : 2;
+                // this.updateStatus(`AI is thinking (Phase ${displayPhaseForValue}/${totalPhases}: Value-based for '${row.sourceHeader}')...`, false);
+                // this.cdr.detectChanges();
 
                 const availableTargetColsForValuePhase = this.targetSchemaColumns.filter(tc => !alreadyUsedTargets.has(tc));
                 if (availableTargetColsForValuePhase.length === 0) continue;
@@ -540,13 +578,15 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
                     }
                 } catch (error) {
                     console.error(`Error during value-based AI suggestion for ${row.sourceHeader}:`, error);
-                    this.updateStatus(`Error for '${row.sourceHeader}' (Phase ${currentPhase}). Check console.`, true);
+                    // let displayPhaseForError = this.isTripletKnowledgeBaseUploaded ? 3 : 2;
+                    // this.updateStatus(`Error for '${row.sourceHeader}' (Phase ${displayPhaseForError}). Check console.`, true);
                 }
             }
         }
     }
+    */
 
-    this.updateStatus(`AI suggestions complete (all ${totalPhases} phases attempted).`, false);
+    this.updateStatus(`AI suggestions complete (all ${totalPhases} phase(s) attempted).`, false);
     this.isSuggesting = false;
     this.suggestMappingsButtonDisabled = false;
     this.suggestButtonText = originalButtonText;
