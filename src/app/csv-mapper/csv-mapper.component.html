@@ -12,14 +12,6 @@
         </div>
 
         <div class="upload-section">
-            <input type="file" #targetCsvFileInput id="target-csv-file-input" accept=".csv" aria-labelledby="target-file-upload-label" class="visually-hidden" (change)="handleFileUpload($event, 'target')">
-            <label for="target-csv-file-input" id="target-file-upload-label" class="file-label" role="button" tabindex="0" (click)="targetCsvFileInput.click()" (keydown)="handleLabelKeyDown($event, targetCsvFileInput)">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="margin-right: 8px;"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
-                2. Choose Target Schema CSV
-            </label>
-        </div>
-
-        <div class="upload-section">
             <input type="file" #tripletCsvFileInput id="triplet-csv-file-input" accept=".csv" aria-labelledby="triplet-file-upload-label" class="visually-hidden" (change)="handleFileUpload($event, 'triplet')">
             <label for="triplet-csv-file-input" id="triplet-file-upload-label" class="file-label" role="button" tabindex="0" (click)="tripletCsvFileInput.click()" (keydown)="handleLabelKeyDown($event, tripletCsvFileInput)">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="margin-right: 8px;"><path d="M6 18c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V8H6v10zm4-7.17L12.17 9 15 11.83V8H9v2.83zM17 5H7l-2-2h14l-2 2z"/></svg>
