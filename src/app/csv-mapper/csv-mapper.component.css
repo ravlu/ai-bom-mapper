@@ -1,0 +1,346 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f7f9;
+    color: #333;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+.container {
+    width: 100%;
+    max-width: 1200px;
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-sizing: border-box;
+    margin-left: auto; 
+    margin-right: auto; 
+}
+
+h1 {
+    color: #2c3e50;
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 2em;
+}
+
+.upload-sections-container {
+    display: flex;
+    justify-content: space-between; /* Adjust for three items */
+    flex-wrap: wrap; 
+    margin-bottom: 20px;
+}
+
+.upload-section {
+    display: flex;
+    flex-direction: column; 
+    align-items: center; 
+    margin: 10px 5px; /* Adjust margin for tighter packing */
+    flex-basis: calc(33.333% - 20px); /* Distribute space for 3 items */
+    min-width: 240px; /* Ensure buttons don't get too small */
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.file-label { 
+    display: inline-flex;
+    align-items: center;
+    justify-content: center; 
+    padding: 12px 20px;
+    font-size: 1em;
+    font-weight: 500;
+    color: #ffffff;
+    background-color: #3498db; /* Default blue for source/target */
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, opacity 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 100%; /* Make label take full width of .upload-section */
+    text-align: center;
+    box-sizing: border-box;
+}
+
+/* Source CSV button color */
+#source-file-upload-label {
+    background-color: #3498db; /* Blue */
+}
+#source-file-upload-label:hover,
+#source-file-upload-label:focus {
+    background-color: #2980b9;
+}
+
+/* Target Schema CSV button color */
+#target-file-upload-label {
+    background-color: #1abc9c; /* Turquoise */
+}
+#target-file-upload-label:hover,
+#target-file-upload-label:focus {
+    background-color: #16a085;
+}
+
+/* Triplet CSV button color */
+#triplet-file-upload-label {
+    background-color: #9b59b6; /* Purple */
+}
+#triplet-file-upload-label:hover,
+#triplet-file-upload-label:focus {
+    background-color: #8e44ad;
+}
+
+
+.file-label:focus-visible {
+    outline: 2px solid currentColor; /* Use button's own color for outline */
+    outline-offset: 2px;
+}
+
+.file-label:disabled {
+    background-color: #bdc3c7; /* Grey for disabled */
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.file-label .spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+
+.status-message {
+    text-align: center;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    padding: 10px 15px;
+    border-radius: 4px;
+    font-size: 0.95em;
+    color: #555;
+    background-color: #ecf0f1;
+    min-height: 1.2em; 
+    border: 1px solid #bdc3c7;
+    line-height: 1.5;
+}
+
+.status-message.error {
+    color: #ffffff;
+    background-color: #e74c3c;
+    border-color: #c0392b;
+    font-weight: 500;
+}
+
+.ai-suggestion-controls {
+    display: flex; 
+    justify-content: center;
+    flex-wrap: wrap; 
+    gap: 15px; 
+    margin-top: 20px; 
+    margin-bottom: 20px; 
+}
+
+#suggest-mappings-button { 
+    background-color: #27ae60; /* Green */
+}
+#suggest-mappings-button:hover,
+#suggest-mappings-button:focus {
+    background-color: #229954;
+}
+#suggest-mappings-button:disabled {
+    background-color: #90d8ab;
+     opacity: 0.7;
+}
+
+#download-triplet-csv-button { 
+    background-color: #e67e22; /* Orange */
+}
+#download-triplet-csv-button:hover,
+#download-triplet-csv-button:focus {
+    background-color: #d35400;
+}
+#download-triplet-csv-button:disabled {
+    background-color: #f5cba7;
+    opacity: 0.7;
+}
+
+#download-mapped-data-button {
+    background-color: #3498db; /* Blue */
+}
+#download-mapped-data-button:hover,
+#download-mapped-data-button:focus {
+    background-color: #2980b9;
+}
+#download-mapped-data-button:disabled {
+    background-color: #a0cdec;
+    opacity: 0.7;
+}
+
+
+.mapping-table-container {
+    margin-top: 20px;
+    overflow-x: auto; 
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+th, td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #e0e0e0;
+    background-color: #fff; 
+    transition: background-color 0.3s ease;
+}
+
+th {
+    background-color: #ecf0f1;
+    color: #2c3e50;
+    font-weight: 600;
+    font-size: 0.9em;
+    text-transform: uppercase;
+}
+
+tr:nth-child(even) td { 
+    background-color: #f9f9f9;
+}
+
+tr:hover td { 
+    background-color: #f1f1f1;
+}
+
+td select {
+    width: 100%; 
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 0.95em;
+    background-color: #fff; 
+    color: #333; 
+    appearance: none; 
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23007CB2%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.4-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E');
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 10px auto;
+    padding-right: 30px; 
+    transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, background-color 0.3s ease;
+}
+
+td select:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+    outline: none;
+}
+td select:disabled {
+    background-color: #eeeeee;
+    color: #888888;
+    cursor: not-allowed;
+}
+
+/* Temporary highlight for select element itself */
+td select.ai-suggested-header, /* triplet will reuse header style */
+td select.ai-suggested-triplet { 
+    background-color: #e0effb !important; 
+    border-color: #3498db;
+}
+td select.ai-suggested-value {
+    background-color: #dff7df !important;
+    border-color: #2ecc71;
+}
+
+/* Persistent highlight for the AI suggested OPTION within the select */
+option.ai-suggested-option-header, /* triplet will reuse header style */
+option.ai-suggested-option-triplet {
+    font-weight: bold;
+    color: #2980b9; 
+}
+option.ai-suggested-option-value {
+    font-weight: bold;
+    color: #27ae60; 
+}
+
+
+/* Temporary highlight for ENTIRE ROW when AI suggested */
+tr.row-ai-suggested-header td, /* triplet will reuse header style */
+tr.row-ai-suggested-triplet td {
+    background-color: #e8f4fd !important; 
+}
+tr.row-ai-suggested-value td {
+    background-color: #dcf1dc !important; 
+}
+
+/* Ensure select highlights are visible on top of row highlights */
+tr.row-ai-suggested-header td select.ai-suggested-header,
+tr.row-ai-suggested-triplet td select.ai-suggested-triplet {
+    background-color: #d0e6f8 !important; 
+}
+tr.row-ai-suggested-value td select.ai-suggested-value {
+    background-color: #c9f7d8 !important;
+}
+
+/* Highlight for rows with duplicate target selections */
+tr.row-duplicate-target td {
+    background-color: #fffacd !important; 
+    border-left: 3px solid #e57373 !important; 
+}
+
+tr.row-duplicate-target:hover td {
+    background-color: #fff0b3 !important;
+}
+
+
+@media (max-width: 992px) { /* Adjust breakpoint for 3 items */
+    .upload-sections-container {
+        flex-direction: column;
+        align-items: center;
+    }
+    .upload-section {
+        width: 100%; 
+        max-width: 400px; /* Limit width in column layout */
+        margin-bottom: 15px;
+        flex-basis: auto; /* Reset flex-basis */
+    }
+}
+
+
+@media (max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+    .container {
+        padding: 20px;
+    }
+    h1 {
+        font-size: 1.5em;
+    }
+    .file-label {
+        padding: 10px 15px;
+        font-size: 0.9em;
+        /* width is already 100% of its container (.upload-section) */
+    }
+    th, td {
+        padding: 8px 10px;
+    }
+    td select {
+        font-size: 0.9em;
+    }
+}
