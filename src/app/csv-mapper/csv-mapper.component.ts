@@ -4,6 +4,8 @@ import { HttpClient } from '@angular/common/http';
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { environment } from '../../environments/environment';
 
+const STANDARD_COLUMNS: string[] = ['Line Item ID', 'Tag Number', 'Short Description', 'Quantity', 'Unit', 'Commodity Code', 'Size1', 'Specification Code'];
+
 // Predefined example values for potential SMAT columns.
 const smat_columns_values: Record<string, string[]> = {
     // Example:
@@ -654,51 +656,125 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const currentMappings = this.getSelectedTargetMappings();
-    const outputTargetHeaders: string[] = [];
-    const mappedTargetToSource: Record<string, string> = {}; // targetHeader -> sourceHeader
+    const currentMappings = this.getSelectedTargetMappings(); // Existing: SourceHeader -> TargetHeader
+    const mappedTargetToSource: Record<string, string> = {}; // TargetHeader -> SourceHeader
+    const allUserMappedTargetHeaders: string[] = []; // All target headers the user actually mapped
 
-    this.sourceCsvHeaders.forEach(sourceHeader => {
-      const targetHeader = currentMappings[sourceHeader];
-      if (targetHeader && targetHeader !== this.N_A_MAP_VALUE && targetHeader !== "") {
-        if (!mappedTargetToSource[targetHeader]) { // Ensure unique target headers in output
-          outputTargetHeaders.push(targetHeader);
-          mappedTargetToSource[targetHeader] = sourceHeader;
+    this.mappingTableRows.forEach(row => {
+      if (row.selectedTarget && row.selectedTarget !== this.N_A_MAP_VALUE && row.selectedTarget !== "") {
+        if (!allUserMappedTargetHeaders.includes(row.selectedTarget)) {
+          allUserMappedTargetHeaders.push(row.selectedTarget);
         }
-        // If targetHeader is already mapped, the first source column mapped to it takes precedence.
-        // This addresses potential duplicates if not caught by checkAndHighlightDuplicateTargets (though it should be).
+        // If multiple source headers map to the same target, this will take the last one.
+        // This is okay for now as duplicates are flagged elsewhere.
+        mappedTargetToSource[row.selectedTarget] = row.sourceHeader;
       }
     });
 
-    if (outputTargetHeaders.length === 0) {
+    if (allUserMappedTargetHeaders.length === 0) {
       this.updateStatus('No valid column mappings found. Please map columns before downloading.', false);
       return;
     }
 
-    const mappedData: string[][] = [];
-    mappedData.push(outputTargetHeaders.map(h => this.escapeCsvCell(h)));
+    // Initialize CSV data arrays
+    const standardCsvData: string[][] = [];
+    const invertedCsvData: string[][] = [];
 
+    // Add header rows
+    standardCsvData.push([...STANDARD_COLUMNS]); // Ensure it's a copy
+    invertedCsvData.push(['Line Item ID', 'Property_Name', 'Property_Value', 'Property_Value_UoM']);
+
+    // Identify 'Line Item ID' Source Header
+    let lineItemIdSourceHeader: string | undefined = undefined;
+    const lineItemIdMapping = this.mappingTableRows.find(row => row.selectedTarget === 'Line Item ID');
+    if (lineItemIdMapping && lineItemIdMapping.sourceHeader) {
+      lineItemIdSourceHeader = lineItemIdMapping.sourceHeader;
+    } else {
+      console.warn("Line Item ID is not mapped. It will be blank in the inverted CSV.");
+    }
+
+    // Determine final headers for standard CSV and non-standard headers for inverted CSV
+    const finalStandardHeaders = STANDARD_COLUMNS.filter(sc => allUserMappedTargetHeaders.includes(sc));
+    const nonStandardTargetHeaders = allUserMappedTargetHeaders.filter(h => !STANDARD_COLUMNS.includes(h));
+
+    // Process Data Rows
     this.sourceCsvSampleData.forEach(sourceRow => {
-      const outputRow: string[] = [];
-      outputTargetHeaders.forEach(targetHeader => {
-        const originalSourceHeaderForThisTarget = mappedTargetToSource[targetHeader];
-        const sourceHeaderIndex = this.sourceCsvHeaders.indexOf(originalSourceHeaderForThisTarget);
-
+      let lineItemIdValue: string = "";
+      if (lineItemIdSourceHeader) {
+        const sourceHeaderIndex = this.sourceCsvHeaders.indexOf(lineItemIdSourceHeader);
         if (sourceHeaderIndex !== -1 && sourceRow[sourceHeaderIndex] !== undefined) {
-          outputRow.push(this.escapeCsvCell(sourceRow[sourceHeaderIndex]));
+          lineItemIdValue = this.escapeCsvCell(sourceRow[sourceHeaderIndex]);
+        }
+      }
+
+      // For Standard CSV
+      const outputStandardRow: string[] = [];
+      STANDARD_COLUMNS.forEach(stdHeader => { // Iterate in the order of STANDARD_COLUMNS
+        if (finalStandardHeaders.includes(stdHeader)) {
+          const originalSourceHeader = mappedTargetToSource[stdHeader];
+          if (originalSourceHeader) {
+            const sourceHeaderIndex = this.sourceCsvHeaders.indexOf(originalSourceHeader);
+            if (sourceHeaderIndex !== -1 && sourceRow[sourceHeaderIndex] !== undefined) {
+              outputStandardRow.push(this.escapeCsvCell(sourceRow[sourceHeaderIndex]));
+            } else {
+              outputStandardRow.push(""); // Source header for this standard column not found in source CSV or value missing
+            }
+          } else {
+             outputStandardRow.push(""); // Standard column was not mapped by user
+          }
         } else {
-          outputRow.push("");
+          outputStandardRow.push(""); // This standard column is not in finalStandardHeaders (i.e., not mapped)
         }
       });
-      mappedData.push(outputRow);
+      standardCsvData.push(outputStandardRow);
+
+      // For Inverted CSV
+      nonStandardTargetHeaders.forEach(nonStdHeader => {
+        const originalSourceHeader = mappedTargetToSource[nonStdHeader];
+        if (originalSourceHeader) {
+          const sourceHeaderIndex = this.sourceCsvHeaders.indexOf(originalSourceHeader);
+          if (sourceHeaderIndex !== -1 && sourceRow[sourceHeaderIndex] !== undefined) {
+            const propertyValue = this.escapeCsvCell(sourceRow[sourceHeaderIndex]);
+            if (propertyValue !== "") { // Only add row if there's a value
+              invertedCsvData.push([lineItemIdValue, this.escapeCsvCell(nonStdHeader), propertyValue, ""]); // UoM is blank
+            }
+          }
+        }
+      });
     });
 
-    if (mappedData.length <= 1) {
-      this.updateStatus('No data to download based on current mappings.', false);
+    let standardDownloaded = false;
+    let invertedDownloaded = false;
+    let statusMessages: string[] = [];
+
+    if (standardCsvData.length > 1) {
+      this.downloadCsv(standardCsvData, "standard_mapped_data.csv");
+      standardDownloaded = true;
+    }
+
+    if (invertedCsvData.length > 1) {
+      this.downloadCsv(invertedCsvData, "inverted_mapped_data.csv");
+      invertedDownloaded = true;
+    }
+
+    if (standardDownloaded && invertedDownloaded) {
+      statusMessages.push("Standard and Inverted Mapped Data CSVs downloaded.");
+    } else if (standardDownloaded) {
+      statusMessages.push("Standard CSV downloaded.");
+      statusMessages.push("Inverted CSV had no data to download.");
+    } else if (invertedDownloaded) {
+      statusMessages.push("Inverted CSV downloaded.");
+      statusMessages.push("Standard CSV had no data to download.");
+    } else {
+      this.updateStatus('No data to download for Standard or Inverted CSVs based on current mappings.', false);
       return;
     }
-    this.downloadCsv(mappedData, "mapped_data.csv");
-    this.updateStatus('Mapped Data CSV downloaded.', false);
+
+    if (lineItemIdSourceHeader === undefined) {
+        statusMessages.push("Note: 'Line Item ID' was not mapped; it will be blank in the Inverted CSV.");
+    }
+
+    this.updateStatus(statusMessages.join(' '), false);
   }
 
   private downloadCsv(data: string[][], filename: string): void {
