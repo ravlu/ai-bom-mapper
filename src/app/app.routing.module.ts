@@ -1,10 +1,16 @@
-import { HttpClient } from '@angular/common/http';
+//import { HttpClient } from '@angular/common/http';
 import { Inject, NgModule } from '@angular/core';
 import { Router, RouterModule, Routes } from '@angular/router';
-import { from, of } from 'rxjs';
-import { catchError, switchMap, take, tap } from 'rxjs/operators';
+import {  Observable, of } from 'rxjs';
+//import { catchError, switchMap, take, tap } from 'rxjs/operators';
 
-import { environment } from '../environments/environment';
+//import { environment } from '../environments/environment';
+import { ClipperMicroAppRoutingModule } from '@sdx2-client/clipper';
+import { SDxTranslateHttpLoader, MicroAppInitializationService } from '@sdx2-client/common';
+import { CLIPPER_TOKEN } from '@clipper/angular';
+import { ClipperApp } from '@clipper/app';
+import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
+import { HttpClient } from '@angular/common/http';
 
 /**
  * Defines all routes for the application and what to load when those routes are navigated to
@@ -35,10 +41,23 @@ const routes: Routes = [
     RouterModule.forRoot(routes, {
       useHash: true,
     }),
+		TranslateModule.forRoot({
+			loader: {
+				provide: TranslateLoader,
+				useClass: SDxTranslateHttpLoader,
+				deps: [HttpClient]
+			}
+		})
   ],
   providers: [],
   exports: [RouterModule],
 })
-export class AppRoutingModule {
-  public constructor(private router: Router) {}
+export class AppRoutingModule extends ClipperMicroAppRoutingModule {
+	public constructor(initializationService: MicroAppInitializationService, router: Router, @Inject(CLIPPER_TOKEN) clipper: ClipperApp) {
+		super(initializationService, clipper, router);
+	}
+
+	protected onBeforeInitialNavigation(): Observable<boolean> {
+		return of(true);
+	}
 }

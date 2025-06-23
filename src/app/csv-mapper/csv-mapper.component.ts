@@ -1,17 +1,17 @@
 // src/app/csv-mapper/csv-mapper.component.ts
 import { Component, OnInit, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { environment } from '../../environments/environment';
 
 const STANDARD_COLUMNS: string[] = ['Line Item ID', 'Tag Number', 'Short Description', 'Quantity', 'Unit', 'Commodity Code', 'Size1', 'Specification Code'];
 
-// Predefined example values for potential SMAT columns.
-const smat_columns_values: Record<string, string[]> = {
-    // Example:
-    // "Status": ["Open", "Closed", "Pending"],
-    // "Priority": ["High", "Medium", "Low"]
-};
+// // Predefined example values for potential SMAT columns.
+// const smat_columns_values: Record<string, string[]> = {
+//     // Example:
+//     // "Status": ["Open", "Closed", "Pending"],
+//     // "Priority": ["High", "Medium", "Low"]
+// };
 
 interface MappingTableRow {
     sourceHeader: string;
@@ -61,6 +61,14 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
   private genAI: GoogleGenAI | null = null;
 
   constructor(private cdr: ChangeDetectorRef, private http: HttpClient) {
+     this.http.get<Array<{ DisplayName: string }>>("http://localhost:810/api/v2/SDA/Objects('0001IVA')/Exposes_12?$select=DisplayName").subscribe({
+      next: (response) => {
+        console.log("OData Response:", response);
+      },
+      error: (error) => { 
+        console.error('Error fetching OData response:', error);
+        this.updateStatus('Error fetching OData response. Check console for details.', true);
+      } });
     if (!environment.apiKey) {
       console.error("API_KEY environment variable not set for Gemini API.");
       this.updateStatus('Configuration error: API Key is missing. Cannot contact AI service.', true);
@@ -68,6 +76,7 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       this.genAI = new GoogleGenAI({apiKey: environment.apiKey});
       
     }
+  
   }
 
   ngOnInit(): void {
@@ -157,6 +166,8 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
   async fetchTargetSchemaFromOData(): Promise<void> {
     this.updateStatus('Fetching target schema from OData...', false);
     try {
+      const response2 = await this.http.get<Array<{ DisplayName: string }>>("http://localhost:810/api/v2/SDA/Objects('0001IVA')/Exposes_12?$select=DisplayName").toPromise();
+      console.log("OData Response:", response2);
       const response = await this.http.get<Array<{ DisplayName: string }>>(this.odataUrl).toPromise();
       if (response && Array.isArray(response)) {
         this.targetSchemaColumns = response.map(item => item.DisplayName).filter(name => name);
@@ -656,7 +667,7 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const currentMappings = this.getSelectedTargetMappings(); // Existing: SourceHeader -> TargetHeader
+   this.getSelectedTargetMappings(); // Existing: SourceHeader -> TargetHeader
     const mappedTargetToSource: Record<string, string> = {}; // TargetHeader -> SourceHeader
     const allUserMappedTargetHeaders: string[] = []; // All target headers the user actually mapped
 
