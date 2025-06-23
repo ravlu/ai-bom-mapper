@@ -29,7 +29,7 @@ interface MappingTableRow {
   styleUrls: ['./csv-mapper.component.css']
 })
 export class CsvMapperComponent implements OnInit, OnDestroy {
-  private odataUrl = 'https://684c168eed2578be881d9c58.mockapi.io/api/v1/LineItemProperties';
+  private odataUrl =    "http://localhost:810/api/v2/SDA/Objects('01979CC447C740C9A183451735D893E5')/Exposes_12?$select=DisplayName";
   sourceCsvHeaders: string[] = [];
   sourceCsvSampleData: string[][] = []; // Only first 10 rows of actual data
   targetSchemaColumns: string[] = [];
@@ -61,14 +61,7 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
   private genAI: GoogleGenAI | null = null;
 
   constructor(private cdr: ChangeDetectorRef, private http: HttpClient) {
-     this.http.get<Array<{ DisplayName: string }>>("http://localhost:810/api/v2/SDA/Objects('0001IVA')/Exposes_12?$select=DisplayName").subscribe({
-      next: (response) => {
-        console.log("OData Response:", response);
-      },
-      error: (error) => { 
-        console.error('Error fetching OData response:', error);
-        this.updateStatus('Error fetching OData response. Check console for details.', true);
-      } });
+    
     if (!environment.apiKey) {
       console.error("API_KEY environment variable not set for Gemini API.");
       this.updateStatus('Configuration error: API Key is missing. Cannot contact AI service.', true);
@@ -166,11 +159,12 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
   async fetchTargetSchemaFromOData(): Promise<void> {
     this.updateStatus('Fetching target schema from OData...', false);
     try {
-      const response2 = await this.http.get<Array<{ DisplayName: string }>>("http://localhost:810/api/v2/SDA/Objects('0001IVA')/Exposes_12?$select=DisplayName").toPromise();
-      console.log("OData Response:", response2);
-      const response = await this.http.get<Array<{ DisplayName: string }>>(this.odataUrl).toPromise();
-      if (response && Array.isArray(response)) {
-        this.targetSchemaColumns = response.map(item => item.DisplayName).filter(name => name);
+      // const response2 = await this.http.get<Array<{ DisplayName: string }>>(this.odataUrl ).toPromise();
+      // console.log("OData Response:", response2);
+   
+      const response: any = await this.http.get<Array<{ DisplayName: string }>>(this.odataUrl).toPromise();
+      if (response && response.value && Array.isArray(response.value)) {
+        this.targetSchemaColumns = response.value.map(item => item.DisplayName).filter(name => name);
         if (this.targetSchemaColumns.length > 0) {
           this.isTargetSchemaProvided = true;
           this.updateStatus(`Target schema loaded from OData: ${this.targetSchemaColumns.length} columns.`, false);
