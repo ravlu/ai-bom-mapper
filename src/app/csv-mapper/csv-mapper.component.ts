@@ -29,7 +29,7 @@ interface MappingTableRow {
   styleUrls: ['./csv-mapper.component.css']
 })
 export class CsvMapperComponent implements OnInit, OnDestroy {
-  private odataUrl =    "http://localhost:810/api/v2/SDA/Objects('01979CC447C740C9A183451735D893E5')/Exposes_12?$select=DisplayName";
+  private odataUrl =    "http://localhost:810/api/v2/SDA/Objects('0197A2700DE949A1858A4E3AEECB5459')/Exposes_12?$select=DisplayName";
   sourceCsvHeaders: string[] = [];
   sourceCsvSampleData: string[][] = []; // Only first 10 rows of actual data
   targetSchemaColumns: string[] = [];
