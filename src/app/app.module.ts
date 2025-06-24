@@ -11,6 +11,7 @@ import { ClipperAppManager } from '@clipper/app';
 import { CLIPPER_TOKEN } from '@clipper/angular';
 import { SDxCoreServicesModule } from '@sdx2-client/common';
 
+
 @NgModule({
   declarations: [AppComponent],
   imports: [
@@ -19,8 +20,7 @@ import { SDxCoreServicesModule } from '@sdx2-client/common';
     HttpClientModule,
     AppRoutingModule,
 		SDxCoreServicesModule,
-		SDxClipperServiceModule,
-		//SDxMaterialThemeModule.forRoot(matIcons)
+		SDxClipperServiceModule
   ],
   providers: [{
 			provide: HTTP_INTERCEPTORS,
