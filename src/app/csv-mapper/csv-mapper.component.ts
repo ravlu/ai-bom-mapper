@@ -735,50 +735,83 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       });
     });
 
-    let standardUploaded = false;
-    let invertedUploaded = false;
     let statusMessages: string[] = [];
 
-    const uploadFile = (fileData: string[][], filename: string) => {
+    const createFileObject = (fileData: string[][], filename: string): File | null => {
+      if (fileData.length <= 1) { // Only headers or empty
+        statusMessages.push(`${filename} had no data to upload.`);
+        return null;
+      }
       const csvContent = fileData.map(row => row.join(',')).join('\r\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const file = new File([blob], filename, { type: 'text/csv;charset=utf-8;' });
-      this.updateStatus(`Uploading ${filename}...`, false);
-      this.loaderService.runFullWorkflow(file).subscribe({
-        next: () => {
-          statusMessages.push(`${filename} uploaded successfully.`);
-          if (filename === "standard_mapped_data.csv") standardUploaded = true;
-          if (filename === "inverted_mapped_data.csv") invertedUploaded = true;
-          this.updateStatus(statusMessages.join(' '), false);
-        },
-        error: (err) => {
-          console.error(`Error uploading ${filename}:`, err);
-          statusMessages.push(`Error uploading ${filename}. Check console.`);
-          this.updateStatus(statusMessages.join(' '), true);
-        }
-      });
+      return new File([blob], filename, { type: 'text/csv;charset=utf-8;' });
     };
 
-    if (standardCsvData.length > 1) {
-      uploadFile(standardCsvData, "standard_mapped_data.csv");
+    const standardFile = createFileObject(standardCsvData, "standard_mapped_data.csv");
+    const invertedFile = createFileObject(invertedCsvData, "inverted_mapped_data.csv");
+
+    const uploadStandard = () => {
+      if (standardFile) {
+        this.updateStatus(`Uploading ${standardFile.name}...`, false);
+        this.loaderService.runFullWorkflow(standardFile).subscribe({
+          next: () => {
+            statusMessages.push(`${standardFile.name} uploaded successfully.`);
+            this.updateStatus(statusMessages.join(' '), false);
+            uploadInverted(); // Proceed to inverted upload
+          },
+          error: (err) => {
+            console.error(`Error uploading ${standardFile.name}:`, err);
+            statusMessages.push(`Error uploading ${standardFile.name}. Check console. Inverted file will not be uploaded.`);
+            this.updateStatus(statusMessages.join(' '), true);
+            // Do not proceed to upload inverted file
+            finalizeUploadProcess();
+          }
+        });
+      } else {
+        // If standard file is null (no data), attempt to upload inverted if it exists
+        uploadInverted();
+      }
+    };
+
+    const uploadInverted = () => {
+      if (invertedFile) {
+        this.updateStatus(`Uploading ${invertedFile.name}...`, false);
+        this.loaderService.runFullWorkflow(invertedFile).subscribe({
+          next: () => {
+            statusMessages.push(`${invertedFile.name} uploaded successfully.`);
+            this.updateStatus(statusMessages.join(' '), false);
+            finalizeUploadProcess();
+          },
+          error: (err) => {
+            console.error(`Error uploading ${invertedFile.name}:`, err);
+            statusMessages.push(`Error uploading ${invertedFile.name}. Check console.`);
+            this.updateStatus(statusMessages.join(' '), true);
+            finalizeUploadProcess();
+          }
+        });
+      } else {
+        finalizeUploadProcess();
+      }
+    };
+
+    const finalizeUploadProcess = () => {
+        if (lineItemIdSourceHeader === undefined && (standardFile || invertedFile)) {
+            statusMessages.push("Note: 'Line Item ID' was not mapped; it will be blank in the Inverted CSV if it was uploaded.");
+        }
+        if (statusMessages.length > 0) {
+            const isError = statusMessages.some(msg => msg.toLowerCase().includes("error"));
+            this.updateStatus(statusMessages.join(' '), isError);
+        } else if (!standardFile && !invertedFile) {
+             this.updateStatus('No data to upload for Standard or Inverted CSVs based on current mappings.', false);
+        }
+    };
+
+    // Start the upload chain
+    if (standardFile || invertedFile) {
+        uploadStandard();
     } else {
-      statusMessages.push("Standard CSV had no data to upload.");
-    }
-
-    if (invertedCsvData.length > 1) {
-      uploadFile(invertedCsvData, "inverted_mapped_data.csv");
-    } else {
-      statusMessages.push("Inverted CSV had no data to upload.");
-    }
-
-    if (lineItemIdSourceHeader === undefined) {
-        statusMessages.push("Note: 'Line Item ID' was not mapped; it will be blank in the Inverted CSV.");
-    }
-
-    if (statusMessages.length > 0 && !(standardCsvData.length > 1 || invertedCsvData.length > 1)) {
-        this.updateStatus(statusMessages.join(' '), false);
-    } else if (!(standardCsvData.length > 1 || invertedCsvData.length > 1)) {
-        this.updateStatus('No data to upload for Standard or Inverted CSVs based on current mappings.', false);
+        // Neither file had data
+        finalizeUploadProcess();
     }
   }
 
