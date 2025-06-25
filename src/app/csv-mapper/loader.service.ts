@@ -115,6 +115,8 @@ export class LoaderService {
   private _createLoaderJob(classificationObid: string): Observable<string> {
     const jobName = `job-${uuid.v4()}`; // Generate a unique name like JMeter's ${__UUID}
     const headers = new HttpHeaders({ 'Accept': 'application/vnd.intergraph.data+json' });
+    headers.set('X-Ingr-TenantId', '1');  
+    headers.set('X-Ingr-OrgId', '5377fd8c-2461-40fa-bda2-f733d6936019');  // Assuming these are required headers
     const body = {
       "Class": "SDALoader",
       "Name": jobName,
