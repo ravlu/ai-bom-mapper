@@ -542,22 +542,28 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       updateSpinner("Triplet Knowledge");
       this.mappingTableRows.forEach(row => {
         if (row.selectedTarget === "" || row.selectedTarget === this.N_A_MAP_VALUE) { // Only if not manually mapped or already N/A
-          // Find all positive suggestions for this anchor from the triplet base
-          const positiveSuggestions = this.tripletKnowledgeBase
-            .filter(entry => entry.anchor === row.sourceHeader && entry.positive)
-            .map(entry => entry.positive);
+          // Find triplet entries where the 'positive' (synonym) matches the current sourceHeader
+          const matchingTripletEntries = this.tripletKnowledgeBase.filter(
+            entry => entry.positive && entry.positive.toLowerCase() === row.sourceHeader.toLowerCase() && entry.anchor
+          );
 
-          for (const suggestedTripletTarget of positiveSuggestions) {
-            if (suggestedTripletTarget === "N/A" || suggestedTripletTarget === this.N_A_MAP_VALUE) {
-              this.applyAISuggestionVisuals(row, 'triplet', this.N_A_MAP_VALUE);
-              break; // N/A is a definitive suggestion for this row from triplets
-            } else if (this.targetSchemaColumns.includes(suggestedTripletTarget) && !alreadyUsedTargets.has(suggestedTripletTarget)) {
-              this.applyAISuggestionVisuals(row, 'triplet', suggestedTripletTarget);
-              alreadyUsedTargets.add(suggestedTripletTarget);
-              break; // Found a valid, unused suggestion
+          for (const tripletEntry of matchingTripletEntries) {
+            const suggestedTargetAnchor = tripletEntry.anchor; // This is the target DisplayName
+
+            // Check if this anchor is a valid target column and hasn't been used yet
+            if (this.targetSchemaColumns.includes(suggestedTargetAnchor) && !alreadyUsedTargets.has(suggestedTargetAnchor)) {
+              this.applyAISuggestionVisuals(row, 'triplet', suggestedTargetAnchor);
+              alreadyUsedTargets.add(suggestedTargetAnchor);
+              break; // Found a valid suggestion for this row, move to the next row
+            }
+            // If the suggestedTargetAnchor is "N/A" (though unlikely for an anchor from synonyms), handle it.
+            // Or if N_A_MAP_VALUE is explicitly set as a positive, treat it.
+            else if (suggestedTargetAnchor === this.N_A_MAP_VALUE || tripletEntry.positive === this.N_A_MAP_VALUE) {
+                 this.applyAISuggestionVisuals(row, 'triplet', this.N_A_MAP_VALUE);
+                 break;
             }
           }
-          // Negatives are not directly used for suggestions here, but for training data generation.
+          // Negatives are not directly used for suggestions here, but for training data generation for the AI model.
         }
       });
       currentLogicalPhase = 1; // Advance logical phase to Header
