@@ -344,3 +344,97 @@ tr.row-duplicate-target:hover td {
         font-size: 0.9em;
     }
 }
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent background */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000; /* Ensure it's on top */
+}
+
+.modal-content {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    width: 400px; /* Or your preferred width */
+    max-width: 90%;
+}
+
+.modal-content h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.5em;
+    color: #2c3e50; /* Match h1 color */
+}
+
+.modal-content .form-group {
+    margin-bottom: 15px;
+}
+
+.modal-content .form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #333; /* Match body color */
+}
+
+.modal-content .form-group input[type="text"] {
+    width: calc(100% - 18px); /* Account for padding and border */
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1em;
+    box-sizing: border-box;
+}
+.modal-content .form-group input[type="text"]:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+    outline: none;
+}
+
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px; /* Space between buttons */
+    margin-top: 20px;
+}
+
+/* Re-use file-label style for modal buttons */
+.modal-actions .file-label {
+    /* padding: 10px 15px; /* Already defined in .file-label */
+    /* font-size: 1em; /* Already defined */
+    /* width: auto; /* Override width: 100% from general .file-label */
+    flex-grow: 0; /* Prevent buttons from growing to fill space */
+}
+.modal-actions .file-label:disabled {
+    background-color: #bdc3c7 !important; /* Ensure disabled style overrides */
+    opacity: 0.7 !important;
+}
+
+
+.modal-actions .file-label.secondary {
+    background-color: #6c757d;
+    color: white;
+    border-color: #6c757d; /* If buttons have borders */
+}
+
+.modal-actions .file-label.secondary:hover:not(:disabled) {
+    background-color: #5a6268;
+    border-color: #545b62; /* If buttons have borders */
+}
+
+.modal-content .status-message.error {
+    /* Using existing .status-message.error, just ensure it's placed correctly in HTML */
+    /* Specific overrides for modal if needed: */
+    margin-bottom: 15px; /* Add some space below error in modal */
+    text-align: left; /* Align text left in modal error */
+}

@@ -76,6 +76,9 @@
                                     [ngClass]="getOptionClass(N_A_MAP_VALUE, row)">
                                 N/A (No Match)
                             </option>
+                            <option *ngIf="allowCreateNewProperty" [value]="CREATE_NEW_PROPERTY_VALUE">
+                                -- Create New Property --
+                            </option>
                             <option *ngFor="let targetCol of targetSchemaColumns" [value]="targetCol"
                                     [ngClass]="getOptionClass(targetCol, row)">
                                 {{ targetCol }}
@@ -85,5 +88,21 @@
                 </tr>
             </tbody>
         </table>
+    </div>
+
+    <!-- Create New Property Modal -->
+    <div *ngIf="isCreatePropertyModalVisible" class="modal-overlay">
+        <div class="modal-content">
+            <h2>Create New Target Property</h2>
+            <p *ngIf="createPropertyError" class="status-message error">{{ createPropertyError }}</p>
+            <div class="form-group">
+                <label for="new-property-name-input">Property Name:</label>
+                <input type="text" id="new-property-name-input" [(ngModel)]="newPropertyName" (input)="onCreatePropertyNameChange()">
+            </div>
+            <div class="modal-actions">
+                <button (click)="handleCreateProperty()" [disabled]="!newPropertyName.trim() || !!createPropertyError" class="file-label">Create</button>
+                <button (click)="closeCreatePropertyModal()" class="file-label secondary">Cancel</button>
+            </div>
+        </div>
     </div>
 </div>

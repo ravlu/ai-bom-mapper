@@ -36,8 +36,10 @@ interface TargetSchemaColumn {
   styleUrls: ['./csv-mapper.component.css']
 })
 export class CsvMapperComponent implements OnInit, OnDestroy {
+  readonly CREATE_NEW_PROPERTY_VALUE = "__CREATE_NEW_PROPERTY__";
   bominterfaceId = '0197A2700DE949A1858A4E3AEECB5459';
   private odataUrl = `http://localhost:810/api/v2/SDA/Objects('${this.bominterfaceId}')/Exposes_12?$select=DisplayName,Synonyms,Antonyms`;
+  private createPropertyUrl = `http://localhost:810/api/v2/SDA/CreateBOMInvertedCSVMapping`;
   sourceCsvHeaders: string[] = [];
   sourceCsvSampleData: string[][] = []; // Only first 10 rows of actual data
   targetSchemaColumns: string[] = []; // This will store only DisplayNames for the dropdown
@@ -66,6 +68,14 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
   isSuggesting = false;
   suggestButtonText = 'Suggest Mappings with AI';
   private suggestionTimeouts: any[] = []; // To clear timeouts on component destroy
+
+  // Create New Property Modal State
+  isCreatePropertyModalVisible: boolean = false;
+  newPropertyName: string = '';
+  currentMappingRowForCreate: MappingTableRow | null = null;
+  allowCreateNewProperty: boolean = false;
+  createPropertyError: string = '';
+
 
   private genAI: GoogleGenAI | null = null;
 
@@ -468,12 +478,91 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
   }
 
   onMappingChange(changedRow: MappingTableRow): void {
-    changedRow.isAiSuggestedTemporarily = false; // User manually changed it
-    // changedRow.aiSuggestionType = null; // Keep type for persistent option highlight
-    // If a user selects the AI suggested option again, it should still be highlighted.
-    // If they select something else, the highlight for the OLD ai suggestion remains, but no new temp highlight.
-    this.checkAndHighlightDuplicateTargets();
-    this.updateDownloadButtonsState();
+    if (changedRow.selectedTarget === this.CREATE_NEW_PROPERTY_VALUE) {
+      this.currentMappingRowForCreate = changedRow;
+      this.newPropertyName = '';
+      this.createPropertyError = '';
+      this.isCreatePropertyModalVisible = true;
+      // Temporarily revert selection in dropdown until modal is resolved
+      // changedRow.selectedTarget = ""; // Or store previous value to revert to on cancel
+    } else {
+      changedRow.isAiSuggestedTemporarily = false; // User manually changed it
+      this.checkAndHighlightDuplicateTargets();
+      this.updateDownloadButtonsState();
+    }
+  }
+
+  onCreatePropertyNameChange(): void {
+    if (!this.newPropertyName.trim()) {
+      this.createPropertyError = 'Property name cannot be empty.';
+      return;
+    }
+    const isDuplicate = this.targetSchemaColumns.some(
+      col => col.toLowerCase() === this.newPropertyName.trim().toLowerCase()
+    );
+    if (isDuplicate) {
+      this.createPropertyError = `Property "${this.newPropertyName.trim()}" already exists.`;
+    } else {
+      this.createPropertyError = ''; // Clear error if valid
+    }
+  }
+
+
+  closeCreatePropertyModal(revertSelection: boolean = true): void {
+    this.isCreatePropertyModalVisible = false;
+    if (this.currentMappingRowForCreate && revertSelection) {
+      // Revert the selection in the dropdown if user cancelled
+      this.currentMappingRowForCreate.selectedTarget = ""; // Or a stored previous value
+      // Manually trigger change detection if needed, or ensure ngModelChange handles it
+      this.checkAndHighlightDuplicateTargets(); // Re-validate after reverting
+      this.updateDownloadButtonsState();
+    }
+    this.currentMappingRowForCreate = null;
+    this.newPropertyName = '';
+    this.createPropertyError = '';
+  }
+
+  async handleCreateProperty(): Promise<void> {
+    if (!this.newPropertyName || this.createPropertyError) {
+      // Should be disabled, but as a safeguard
+      this.createPropertyError = this.createPropertyError || 'Property name is invalid.';
+      return;
+    }
+
+    const propertyToCreate = this.newPropertyName.trim();
+
+    try {
+      this.updateStatus(`Creating new property "${propertyToCreate}"...`, false);
+      // Assuming API expects {"propertyDef": "name"}
+      await this.http.post(this.createPropertyUrl, { propertyDef: propertyToCreate }).toPromise();
+
+      this.updateStatus(`Successfully created property "${propertyToCreate}".`, false);
+
+      // Add to target schema lists
+      this.targetSchemaColumns.push(propertyToCreate);
+      this.targetSchemaData.push({
+        DisplayName: propertyToCreate,
+        Synonyms: null,
+        Antonyms: null
+      });
+
+      if (this.currentMappingRowForCreate) {
+        this.currentMappingRowForCreate.selectedTarget = propertyToCreate;
+        // Highlight it as if AI suggested it or a different class? For now, just select.
+        this.currentMappingRowForCreate.isAiSuggestedTemporarily = false;
+      }
+
+      this.closeCreatePropertyModal(false); // Close modal, don't revert selection
+      this.checkAndHighlightDuplicateTargets();
+      this.updateDownloadButtonsState();
+      this.cdr.detectChanges();
+
+    } catch (error: any) {
+      console.error('Error creating new property:', error);
+      const errorMsg = error.error?.message || error.message || 'An unknown error occurred.';
+      this.createPropertyError = `Failed to create property: ${errorMsg}`;
+      this.updateStatus(`Error creating property "${propertyToCreate}". ${errorMsg}`, true);
+    }
   }
 
   private applyAISuggestionVisuals(
@@ -702,6 +791,7 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
     this.isSuggesting = false;
     this.suggestMappingsButtonDisabled = false;
     this.suggestButtonText = originalButtonText;
+    this.allowCreateNewProperty = true; // Enable create new property option
     this.checkAndHighlightDuplicateTargets();
     this.updateDownloadButtonsState();
     this.cdr.detectChanges();
