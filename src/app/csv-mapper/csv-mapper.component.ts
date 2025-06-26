@@ -24,6 +24,12 @@ interface MappingTableRow {
     // aiSuggestedOptionValue?: string; // The value of the option that AI suggested (for persistent option highlight)
 }
 
+interface TargetSchemaColumn {
+  DisplayName: string;
+  Synonyms: string[] | null;
+  Antonyms: string[] | null;
+}
+
 @Component({
   selector: 'app-csv-mapper',
   templateUrl: './csv-mapper.component.html',
@@ -31,15 +37,16 @@ interface MappingTableRow {
 })
 export class CsvMapperComponent implements OnInit, OnDestroy {
   bominterfaceId = '0197A2700DE949A1858A4E3AEECB5459';
-  private odataUrl =    `http://localhost:810/api/v2/SDA/Objects('${this.bominterfaceId}')/Exposes_12?$select=DisplayName`;
+  private odataUrl = `http://localhost:810/api/v2/SDA/Objects('${this.bominterfaceId}')/Exposes_12?$select=DisplayName,Synonyms,Antonyms`;
   sourceCsvHeaders: string[] = [];
   sourceCsvSampleData: string[][] = []; // Only first 10 rows of actual data
-  targetSchemaColumns: string[] = [];
+  targetSchemaColumns: string[] = []; // This will store only DisplayNames for the dropdown
+  private targetSchemaData: TargetSchemaColumn[] = []; // To store full data including synonyms/antonyms
   tripletKnowledgeBase: Array<{ anchor: string, positive: string, negative: string }> = [];
 
   isSourceUploaded = false;
   isTargetSchemaProvided = false; // This will be set by OData fetch
-  isTripletKnowledgeBaseUploaded = false;
+  isTripletKnowledgeBaseUploaded = false; // Can be true either by OData or file upload
 
   readonly N_A_MAP_VALUE = "__N/A_MAPPING__";
 
@@ -81,17 +88,17 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       next: (response: any) => {
         console.log("OBID Response:", response);
         this.bominterfaceId = response.value?.[0]?.OBID || this.bominterfaceId;
-        this.odataUrl =    `http://localhost:810/api/v2/SDA/Objects('${this.bominterfaceId}')/Exposes_12?$select=DisplayName`;
+        this.odataUrl = `http://localhost:810/api/v2/SDA/Objects('${this.bominterfaceId}')/Exposes_12?$select=DisplayName,Synonyms,Antonyms`;
         console.log("Fetched OBID:", this.bominterfaceId);
-        this.fetchTargetSchemaFromOData();
+        this.fetchTargetSchemaFromOData(); // This will now also trigger triplet fetching
         this.checkIfReadyForMappingAndSuggestions();
       },
       error: (err) => {
         console.error("Error fetching OBID:", err);
         this.updateStatus("Error fetching OBID. Check console for details.", true);
         // Still attempt to load target schema with fallback/default OBID
-     //   this.fetchTargetSchemaFromOData();
-      //  this.checkIfReadyForMappingAndSuggestions();
+        // this.fetchTargetSchemaFromOData(); // This will now also trigger triplet fetching
+        // this.checkIfReadyForMappingAndSuggestions();
       }
     });
 }
@@ -178,15 +185,20 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
   async fetchTargetSchemaFromOData(): Promise<void> {
     this.updateStatus('Fetching target schema from OData...', false);
     try {
-      // const response2 = await this.http.get<Array<{ DisplayName: string }>>(this.odataUrl ).toPromise();
-      // console.log("OData Response:", response2);
-   
-      const response: any = await this.http.get<Array<{ DisplayName: string }>>(this.odataUrl).toPromise();
+      const response: any = await this.http.get<Array<TargetSchemaColumn>>(this.odataUrl).toPromise();
       if (response && response.value && Array.isArray(response.value)) {
-        this.targetSchemaColumns = response.value.map(item => item.DisplayName).filter(name => name);
+        this.targetSchemaData = response.value.map((item: any) => ({
+          DisplayName: item.DisplayName,
+          Synonyms: item.Synonyms ? item.Synonyms.split(';').map((s: string) => s.trim()) : null,
+          Antonyms: item.Antonyms ? item.Antonyms.split(';').map((a: string) => a.trim()) : null,
+        })).filter((item: TargetSchemaColumn) => item.DisplayName);
+
+        this.targetSchemaColumns = this.targetSchemaData.map(item => item.DisplayName);
+
         if (this.targetSchemaColumns.length > 0) {
           this.isTargetSchemaProvided = true;
           this.updateStatus(`Target schema loaded from OData: ${this.targetSchemaColumns.length} columns.`, false);
+          this.fetchTripletKnowledgeFromOData(); // Call to populate triplets
         } else {
           this.updateStatus('Target schema loaded from OData, but no display names found.', true);
           this.isTargetSchemaProvided = false;
@@ -201,6 +213,54 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       this.isTargetSchemaProvided = false;
     }
     this.checkIfReadyForMappingAndSuggestions(); // Update UI based on new state
+  }
+
+  fetchTripletKnowledgeFromOData(): void {
+    if (!this.isTargetSchemaProvided || this.targetSchemaData.length === 0) {
+      return;
+    }
+
+    const triplets: Array<{ anchor: string, positive: string, negative: string }> = [];
+    this.targetSchemaData.forEach(item => {
+      if (item.DisplayName) {
+        if (item.Synonyms && item.Synonyms.length > 0) {
+          item.Synonyms.forEach(synonym => {
+            if (synonym) { // Ensure synonym is not empty
+              triplets.push({ anchor: item.DisplayName, positive: synonym, negative: "" });
+            }
+          });
+        }
+        if (item.Antonyms && item.Antonyms.length > 0) {
+          item.Antonyms.forEach(antonym => {
+            if (antonym) { // Ensure antonym is not empty
+              // If synonyms also existed, we might create new entries or append to existing ones.
+              // For simplicity, creating new entries. Could be optimized.
+              triplets.push({ anchor: item.DisplayName, positive: "", negative: antonym });
+            }
+          });
+        }
+        // If only DisplayName exists, and no synonyms or antonyms, we don't add a triplet.
+        // Or, we could add { anchor: item.DisplayName, positive: item.DisplayName, negative: ""} if needed.
+        // Current user story implies synonyms/antonyms are the source for positive/negative.
+      }
+    });
+
+    if (triplets.length > 0) {
+      // If a CSV was uploaded, we might want to merge or prioritize.
+      // For now, OData triplets will overwrite if fetched after a CSV upload (which shouldn't happen with current flow)
+      // or append if this is called multiple times (which it shouldn't).
+      // Let's assume this is the primary source if no CSV is uploaded.
+      if (!this.isTripletKnowledgeBaseUploaded) { // Only set if not already set by CSV
+        this.tripletKnowledgeBase = triplets;
+        this.isTripletKnowledgeBaseUploaded = true;
+        this.updateStatus(`Triplet knowledge automatically derived from OData: ${this.tripletKnowledgeBase.length} relationships.`, false);
+      } else {
+        // Potentially merge or inform user about multiple sources.
+        // For now, if CSV was uploaded, we prefer that.
+        console.log("Triplet CSV already uploaded. OData triplets were fetched but not applied to avoid overwrite. Consider merging logic if needed.");
+      }
+    }
+    this.checkIfReadyForMappingAndSuggestions();
   }
 
   updateDownloadButtonsState(): void {
@@ -234,11 +294,23 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
     if (this.isSourceUploaded && this.isTargetSchemaProvided) {
       this.aiSuggestionControlsVisible = true;
       this.suggestMappingsButtonDisabled = false;
-      let readyMessage = 'Source CSV loaded. Target Schema automatically loaded from OData.';
-      if (this.isTripletKnowledgeBaseUploaded) {
-        readyMessage += ' Triplet Knowledge CSV also loaded.';
-      }
+      let readyMessage = 'Source CSV loaded. Target Schema and Triplet Knowledge automatically loaded from OData.';
+      // if (this.isTripletKnowledgeBaseUploaded) { // This is now part of the above message or handled if CSV was uploaded first
+      //   readyMessage += ' Triplet Knowledge CSV also loaded.';
+      // }
       readyMessage += ' You can now manually map columns or use AI suggestions.';
+      // Check if triplet was loaded by CSV, if so, amend message.
+      // This check needs to be more robust if we allow OData triplets AND CSV triplets to merge.
+      // For now, if isTripletKnowledgeBaseUploaded is true, it could be from OData or CSV.
+      // The fetchTripletKnowledgeFromOData has logic to not overwrite CSV-loaded data.
+      // So the generic "Triplet knowledge available" is fine.
+      if (this.isTripletKnowledgeBaseUploaded && !this.tripletKnowledgeBase.some(t => t.anchor)) {
+          // This case implies isTripletKnowledgeBaseUploaded was true BUT OData didn't find any,
+          // and no CSV was uploaded. This state should ideally not happen with current logic.
+          // Or, if a CSV was uploaded but it was empty/invalid.
+      }
+
+
       this.updateStatus(readyMessage, false);
 
       if (this.sourceCsvHeaders.length > 0 && this.mappingTableRows.length === 0) { // Avoid re-creating table if already exists
@@ -436,12 +508,15 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
     this.suggestMappingsButtonDisabled = true;
     const originalButtonText = this.suggestButtonText;
 
-    const totalPhases = this.isTripletKnowledgeBaseUploaded ? 2 : 1;
+    // Triplet knowledge is now potentially available from OData even if isTripletKnowledgeBaseUploaded (by file) is false
+    const hasAnyTripletKnowledge = this.tripletKnowledgeBase.length > 0;
+
+    const totalPhases = hasAnyTripletKnowledge ? 2 : 1;
     let currentLogicalPhase = 0; // 0 for Triplet (if active), 1 for Header
 
     const updateSpinner = (phaseType: string) => {
       let displayPhase = currentLogicalPhase;
-      if (this.isTripletKnowledgeBaseUploaded) {
+      if (hasAnyTripletKnowledge) {
         displayPhase += 1; // User sees 1-indexed phases
       } else {
         // If only header phase, it's phase 1 of 1
@@ -462,22 +537,27 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
 
 
     // Phase 0: Triplet Knowledge Base
-    if (this.isTripletKnowledgeBaseUploaded) {
+    if (hasAnyTripletKnowledge) {
       currentLogicalPhase = 0; // Corresponds to "Phase 1" for user
       updateSpinner("Triplet Knowledge");
       this.mappingTableRows.forEach(row => {
         if (row.selectedTarget === "" || row.selectedTarget === this.N_A_MAP_VALUE) { // Only if not manually mapped or already N/A
-          const tripletEntry = this.tripletKnowledgeBase.find(entry => entry.anchor === row.sourceHeader);
-          if (tripletEntry && tripletEntry.positive) {
-            const suggestedTripletTarget = tripletEntry.positive;
+          // Find all positive suggestions for this anchor from the triplet base
+          const positiveSuggestions = this.tripletKnowledgeBase
+            .filter(entry => entry.anchor === row.sourceHeader && entry.positive)
+            .map(entry => entry.positive);
+
+          for (const suggestedTripletTarget of positiveSuggestions) {
             if (suggestedTripletTarget === "N/A" || suggestedTripletTarget === this.N_A_MAP_VALUE) {
               this.applyAISuggestionVisuals(row, 'triplet', this.N_A_MAP_VALUE);
-              // N/A doesn't consume a target slot.
+              break; // N/A is a definitive suggestion for this row from triplets
             } else if (this.targetSchemaColumns.includes(suggestedTripletTarget) && !alreadyUsedTargets.has(suggestedTripletTarget)) {
               this.applyAISuggestionVisuals(row, 'triplet', suggestedTripletTarget);
               alreadyUsedTargets.add(suggestedTripletTarget);
+              break; // Found a valid, unused suggestion
             }
           }
+          // Negatives are not directly used for suggestions here, but for training data generation.
         }
       });
       currentLogicalPhase = 1; // Advance logical phase to Header
