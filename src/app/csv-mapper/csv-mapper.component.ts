@@ -28,6 +28,7 @@ interface TargetSchemaColumn {
   DisplayName: string;
   Synonyms: string[] | null;
   Antonyms: string[] | null;
+  UID: string;
 }
 
 @Component({
@@ -38,7 +39,7 @@ interface TargetSchemaColumn {
 export class CsvMapperComponent implements OnInit, OnDestroy {
   readonly CREATE_NEW_PROPERTY_VALUE = "__CREATE_NEW_PROPERTY__";
   bominterfaceId = '0197A2700DE949A1858A4E3AEECB5459';
-  private odataUrl = `http://localhost:810/api/v2/SDA/Objects('${this.bominterfaceId}')/Exposes_12?$select=DisplayName,Synonyms,Antonyms`;
+  private odataUrl = `http://localhost:810/api/v2/SDA/Objects('${this.bominterfaceId}')/Exposes_12?$select=DisplayName,Synonyms,Antonyms,UID`;
   private createPropertyUrl = `http://localhost:810/api/v2/SDA/CreateBOMInvertedCSVMapping`;
   sourceCsvHeaders: string[] = [];
   sourceCsvSampleData: string[][] = []; // Only first 10 rows of actual data
@@ -98,8 +99,9 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       next: (response: any) => {
         console.log("OBID Response:", response);
         this.bominterfaceId = response.value?.[0]?.OBID || this.bominterfaceId;
-        this.odataUrl = `http://localhost:810/api/v2/SDA/Objects('${this.bominterfaceId}')/Exposes_12?$select=DisplayName,Synonyms,Antonyms`;
-        console.log("Fetched OBID:", this.bominterfaceId);
+        // Update the odataUrl with the potentially new bominterfaceId
+        this.odataUrl = `http://localhost:810/api/v2/SDA/Objects('${this.bominterfaceId}')/Exposes_12?$select=DisplayName,Synonyms,Antonyms,UID`;
+        console.log("Fetched OBID:", this.bominterfaceId, "New OData URL:", this.odataUrl);
         this.fetchTargetSchemaFromOData(); // This will now also trigger triplet fetching
         this.checkIfReadyForMappingAndSuggestions();
       },
@@ -201,7 +203,8 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
           DisplayName: item.DisplayName,
           Synonyms: item.Synonyms ? item.Synonyms.split(';').map((s: string) => s.trim()) : null,
           Antonyms: item.Antonyms ? item.Antonyms.split(';').map((a: string) => a.trim()) : null,
-        })).filter((item: TargetSchemaColumn) => item.DisplayName);
+          UID: item.UID // Make sure UID is present in the response and item
+        })).filter((item: TargetSchemaColumn) => item.DisplayName && item.UID); // Ensure UID is also present
 
         this.targetSchemaColumns = this.targetSchemaData.map(item => item.DisplayName);
 
@@ -543,7 +546,11 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       this.targetSchemaData.push({
         DisplayName: propertyToCreate,
         Synonyms: null,
-        Antonyms: null
+        Antonyms: null,
+        UID: '' // Or some placeholder, since backend creates actual UID. This new prop won't have a backend UID yet for inverted mapping.
+                // This might need further thought if UIDs for newly created client-side props are critical before a refresh.
+                // For now, an empty string or a temporary client-generated ID.
+                // Given the request is to use UID from OData for *existing* properties, this is less critical.
       });
 
       if (this.currentMappingRowForCreate) {
@@ -921,13 +928,25 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       standardCsvData.push(outputStandardRow);
 
       nonStandardTargetHeaders.forEach(nonStdHeader => {
-        const originalSourceHeader = mappedTargetToSource[nonStdHeader];
+        const originalSourceHeader = mappedTargetToSource[nonStdHeader]; // nonStdHeader is DisplayName
         if (originalSourceHeader) {
           const sourceHeaderIndex = this.sourceCsvHeaders.indexOf(originalSourceHeader);
           if (sourceHeaderIndex !== -1 && sourceRow[sourceHeaderIndex] !== undefined) {
             const propertyValue = this.escapeCsvCell(sourceRow[sourceHeaderIndex]);
             if (propertyValue !== "") {
-              invertedCsvData.push([lineItemIdValue, this.escapeCsvCell(nonStdHeader), propertyValue, ""]);
+              const targetSchemaEntry = this.targetSchemaData.find(tsd => tsd.DisplayName === nonStdHeader);
+              let propertyNameForCsv = nonStdHeader; // Default to DisplayName
+
+              if (targetSchemaEntry && targetSchemaEntry.UID && targetSchemaEntry.UID.trim() !== "") {
+                propertyNameForCsv = targetSchemaEntry.UID;
+              } else if (targetSchemaEntry) {
+                // Entry exists but UID is missing, empty, or whitespace
+                console.warn(`UID is missing or empty for DisplayName: '${nonStdHeader}'. Using DisplayName as fallback for Property_Name in inverted CSV.`);
+              } else {
+                // No entry found for this DisplayName at all (should be rare if mappings are correct)
+                console.warn(`No target schema entry found for DisplayName: '${nonStdHeader}'. Using DisplayName as fallback for Property_Name in inverted CSV.`);
+              }
+              invertedCsvData.push([lineItemIdValue, this.escapeCsvCell(propertyNameForCsv), propertyValue, ""]);
             }
           }
         }
