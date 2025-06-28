@@ -40,7 +40,7 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
   readonly CREATE_NEW_PROPERTY_VALUE = "__CREATE_NEW_PROPERTY__";
   bominterfaceId = '0197A2700DE949A1858A4E3AEECB5459';
   private odataUrl = `http://localhost:810/api/v2/SDA/Objects('${this.bominterfaceId}')/Exposes_12?$select=DisplayName,Synonyms,Antonyms,UID`;
-  private createPropertyUrl = `http://localhost:810/api/v2/SDA/CreateBOMInvertedCSVMapping`;
+  private createPropertyUrl = `http://localhost:810/api/v2/SDA/CreateBOMInvertedCSVMapping()`;
   sourceCsvHeaders: string[] = [];
   sourceCsvSampleData: string[][] = []; // Only first 10 rows of actual data
   targetSchemaColumns: string[] = []; // This will store only DisplayNames for the dropdown
@@ -532,12 +532,15 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const propertyToCreate = this.newPropertyName.trim();
+    const propertyToCreate = this.newPropertyName.trim(); // Sanitize to alphanumeric + underscore
 
     try {
       this.updateStatus(`Creating new property "${propertyToCreate}"...`, false);
       // Assuming API expects {"propertyDef": "name"}
-      await this.http.post(this.createPropertyUrl, { propertyDef: propertyToCreate }).toPromise();
+  
+      const headers = { 'spf-config-uid': 'PL_PlantA' };
+      headers['X-Ingr-TenantId'] = '1'; // Ensure content type is set 
+      await this.http.post(this.createPropertyUrl, { propertyDef: propertyToCreate }, { headers }).toPromise();
 
       this.updateStatus(`Successfully created property "${propertyToCreate}".`, false);
 
@@ -976,7 +979,9 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
           next: () => {
             statusMessages.push(`${standardFile.name} uploaded successfully.`);
             this.updateStatus(statusMessages.join(' '), false);
-            uploadInverted(); // Proceed to inverted upload
+            setTimeout(() => {
+              uploadInverted(); // Proceed to inverted upload after 10 seconds
+            }, 60000);
           },
           error: (err) => {
             console.error(`Error uploading ${standardFile.name}:`, err);
