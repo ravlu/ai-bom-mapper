@@ -28,13 +28,6 @@
             </svg>
             {{ suggestButtonText }}
         </button>
-        <button id="download-triplet-csv-button" class="file-label" aria-label="Download triplet data for AI analysis"
-                *ngIf="downloadTripletCsvButtonVisible" [disabled]="downloadTripletCsvButtonDisabled" (click)="handleDownloadTripletCsv()">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="margin-right: 8px;">
-                <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-            </svg>
-            Download Triplet Data
-        </button>
        <button id="upload-mapped-data-button" class="file-label" aria-label="Upload currently mapped data"
                 *ngIf="downloadMappedDataButtonVisible" [disabled]="downloadMappedDataButtonDisabled" (click)="handleDownloadMappedDataCsv()">
              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="margin-right: 8px;">
