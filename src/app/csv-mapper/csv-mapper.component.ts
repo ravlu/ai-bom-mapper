@@ -484,47 +484,43 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
   }
 
   onMappingChange(changedRow: MappingTableRow): void {
-    const userSelection = changedRow.selectedTarget;
-    const previousAiSuggestion = changedRow.aiSuggestedTargetValue; // Assuming this holds the AI suggestion
+    const userSelectedTarget = changedRow.selectedTarget;
+    const aiSuggestedTarget = changedRow.aiSuggestedTargetValue; // What AI last suggested for this row
     const sourceHeader = changedRow.sourceHeader;
 
-    // Handle "Create New Property" selection first
-    if (userSelection === this.CREATE_NEW_PROPERTY_VALUE) {
+    // Priority 1: Handle "Create New Property" selection
+    if (userSelectedTarget === this.CREATE_NEW_PROPERTY_VALUE) {
       this.currentMappingRowForCreate = changedRow;
       this.newPropertyName = '';
       this.createPropertyError = '';
       this.isCreatePropertyModalVisible = true;
-      // changedRow.selectedTarget will be reset if modal is cancelled.
-      return; // Exit early, feedback logic will be handled if/when property is created & assigned.
+      // Feedback for a newly created property will be handled when it's actually created and assigned.
+      // For now, we don't want to revert the dropdown immediately if _updatePropertyFeedback is async.
+      // The closeCreatePropertyModal(true) handles reverting if cancelled.
+      return;
     }
 
-    // Process feedback based on AI suggestion and user's current selection
-    if (previousAiSuggestion && previousAiSuggestion !== this.N_A_MAP_VALUE && previousAiSuggestion !== "") {
-      // There was a previous AI suggestion for this row
-      if (userSelection === previousAiSuggestion) {
-        // User explicitly selected/confirmed the AI suggestion
-        if (userSelection && userSelection !== this.N_A_MAP_VALUE && userSelection !== "") {
-          this._updatePropertyFeedback(userSelection, sourceHeader, true);
-        }
-      } else {
-        // User changed the AI suggestion to something else (or to N/A)
-        // 1. Mark sourceHeader as Antonym for the original AI suggestion
-        this._updatePropertyFeedback(previousAiSuggestion, sourceHeader, false);
-
-        // 2. If the new selection is a valid property, mark sourceHeader as Synonym for it
-        if (userSelection && userSelection !== this.N_A_MAP_VALUE && userSelection !== "") {
-          this._updatePropertyFeedback(userSelection, sourceHeader, true);
-        }
+    // Apply new feedback logic
+    // Synonym Logic: If user selected a valid target AND it's different from the source header itself.
+    if (userSelectedTarget && userSelectedTarget !== this.N_A_MAP_VALUE && userSelectedTarget !== "") {
+      if (sourceHeader.toLowerCase() !== userSelectedTarget.toLowerCase()) {
+        this._updatePropertyFeedback(userSelectedTarget, sourceHeader, true);
       }
-    } else if (userSelection && userSelection !== this.N_A_MAP_VALUE && userSelection !== "") {
-      // No previous AI suggestion (or it was N/A), and user made a valid manual selection
-      this._updatePropertyFeedback(userSelection, sourceHeader, true);
     }
 
-    // General UI updates after any mapping change (except create new)
-    changedRow.isAiSuggestedTemporarily = false; // User manually interacted
+    // Antonym Logic: If AI had made a valid suggestion AND user changed it to something else (could be another property or N/A).
+    if (aiSuggestedTarget && aiSuggestedTarget !== this.N_A_MAP_VALUE && aiSuggestedTarget !== "") {
+      if (userSelectedTarget !== aiSuggestedTarget) {
+        this._updatePropertyFeedback(aiSuggestedTarget, sourceHeader, false);
+      }
+    }
+
+    // General UI updates after any mapping change
+    changedRow.isAiSuggestedTemporarily = false; // User manually interacted, remove temporary AI highlight
     this.checkAndHighlightDuplicateTargets();
     this.updateDownloadButtonsState();
+    // Note: aiSuggestedTargetValue remains on the row. If AI runs again, it will be overwritten.
+    // If user changes mapping multiple times without AI re-running, aiSuggestedTargetValue still refers to the *last AI suggestion*.
   }
 
   onCreatePropertyNameChange(): void {
