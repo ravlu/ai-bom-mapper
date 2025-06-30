@@ -1,6 +1,6 @@
 // src/app/csv-mapper/csv-mapper.component.ts
 import { Component, OnInit, ChangeDetectorRef, OnDestroy } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { GoogleGenAI } from "@google/genai";
 import { environment } from '../../environments/environment';
 import { LoaderService } from './loader.service';
@@ -41,7 +41,7 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
   readonly CREATE_NEW_PROPERTY_VALUE = "__CREATE_NEW_PROPERTY__";
   bominterfaceId = '0197A2700DE949A1858A4E3AEECB5459';
   private odataUrl = `http://localhost:810/api/v2/SDA/Objects('${this.bominterfaceId}')/Exposes_12?$select=DisplayName,Synonyms,Antonyms,UID,OBID`;
-  private readonly SDA_OBJECTS_BASE_URL = "https://hexagonali.dev.sdr.hxgnsmartcloud.com/sdx-clipper_cus/sdxservice/api/v2/SDA/Objects"; // For PATCH
+  private readonly SDA_OBJECTS_BASE_URL = "http://localhost:810/api/v2/SDA/Objects"; // For PATCH
   private createPropertyUrl = `http://localhost:810/api/v2/SDA/CreateBOMInvertedCSVMapping`;
   sourceCsvHeaders: string[] = [];
   sourceCsvSampleData: string[][] = []; // Only first 10 rows of actual data
@@ -615,8 +615,13 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
     let currentAntonyms = '';
 
     try {
+       const headers = new HttpHeaders({ 'Accept': 'application/vnd.intergraph.data+json' });
+       headers.set('X-Ingr-TenantId', '1');  
+    headers.set('X-Ingr-OrgId', '5377fd8c-2461-40fa-bda2-f733d6936019'); 
+     console.log('headers', headers);
+      // Ensure we have the correct headers for the request
       // Fetch current Synonyms and Antonyms first
-      const currentObjectState: any = await this.http.get(`${patchUrl}?$select=Synonyms,Antonyms`).toPromise();
+      const currentObjectState: any = await this.http.get(`${patchUrl}?$select=Synonyms,Antonyms`, { headers:headers }).toPromise();
       currentSynonyms = currentObjectState.Synonyms || '';
       currentAntonyms = currentObjectState.Antonyms || '';
 
@@ -653,7 +658,11 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
       }
 
       if (changed) {
-        await this.http.patch(patchUrl, payload).toPromise();
+            const headers = new HttpHeaders({ 'Accept': 'application/vnd.intergraph.data+json' });
+       headers.set('X-Ingr-TenantId', '1');  
+    headers.set('X-Ingr-OrgId', '5377fd8c-2461-40fa-bda2-f733d6936019'); 
+     console.log('headers', headers);
+        await this.http.patch(patchUrl, payload,{headers:headers}).toPromise();
         this.updateStatus(`Feedback for "${feedbackSourceHeader}" on "${propertyName}" saved.`, false);
         // Optionally update local cache of synonyms/antonyms for targetSchemaEntry
         if (payload.Synonyms !== undefined) targetSchemaEntry.Synonyms = payload.Synonyms.split(';');
@@ -993,7 +1002,10 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
             if (propertyValue !== "") {
               const targetSchemaEntry = this.targetSchemaData.find(tsd => tsd.DisplayName === nonStdHeader);
               let propertyNameForCsv = nonStdHeader; // Default to DisplayName
-
+              if(!propertyNameForCsv.startsWith("BOM")) {
+              propertyNameForCsv = propertyNameForCsv.replace(/[^a-zA-Z0-9_]/g, ''); // Replace non-alphanumeric with underscore
+              propertyNameForCsv= "BOM"+ propertyNameForCsv; // Ensure it starts with "BOM"
+              }
               if (targetSchemaEntry && targetSchemaEntry.UID && targetSchemaEntry.UID.trim() !== "") {
                 propertyNameForCsv = targetSchemaEntry.UID;
               } else if (targetSchemaEntry) {
@@ -1045,7 +1057,10 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
         });
       } else {
         // If standard file is null (no data), attempt to upload inverted if it exists
-        uploadInverted();
+        setTimeout(() => {
+             uploadInverted();
+        }, 180000);
+     
       }
     };
      const uploadInverted = () => {
@@ -1097,20 +1112,20 @@ export class CsvMapperComponent implements OnInit, OnDestroy {
   }
   
 
-  private downloadCsv(data: string[][], filename: string): void {
-    const csvContent = data.map(row => row.join(',')).join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute("download", filename);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } else {
-      this.updateStatus('CSV download not supported by your browser.', true);
-    }
-  }
+  //private downloadCsv(data: string[][], filename: string): void {
+  //  const csvContent = data.map(row => row.join(',')).join('\r\n');
+  //  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  //  const link = document.createElement("a");
+  //  if (link.download !== undefined) {
+  //    const url = URL.createObjectURL(blob);
+  //    link.setAttribute("href", url);
+  //    link.setAttribute("download", filename);
+  //    link.style.visibility = 'hidden';
+  //    document.body.appendChild(link);
+  //    link.click();
+  //    document.body.removeChild(link);
+  //  } else {
+  //    this.updateStatus('CSV download not supported by your browser.', true);
+  //  }
+  //}
 }
